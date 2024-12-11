@@ -8,6 +8,7 @@
 #include <mavsdk/mavsdk.h>
 #include <mavsdk/plugins/action/action.h>
 #include <mavsdk/plugins/telemetry/telemetry.h>
+#include <mavsdk/plugins/mavlink_passthrough/mavlink_passthrough.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <chrono>
@@ -18,6 +19,7 @@ using std::chrono::seconds;
 using std::this_thread::sleep_for;
 
 #define BUFFER_SIZE 256
+static void send_fuzzing_Message(MavlinkPassthrough &mavlink_passthrough, std::streamsize bytesRead);
 
 int main()
 {
@@ -71,20 +73,21 @@ int main()
     }
 
     // Instantiate plugins.
-    auto telemetry = Telemetry{system.value()};
-    auto action = Action{system.value()};
+    // auto telemetry = Telemetry{system.value()};
+    // auto action = Action{system.value()};
+    auto mavlink_passthrough = MavlinkPassthrough{system.value()};
 
     // We want to listen to the altitude of the drone at 1 Hz.
-    const auto set_rate_result = telemetry.set_rate_position(1.0);
-    if (set_rate_result != Telemetry::Result::Success)
-    {
-      std::cerr << "Setting rate failed: " << set_rate_result << '\n';
-      return 1;
-    }
+    // const auto set_rate_result = telemetry.set_rate_position(1.0);
+    // if (set_rate_result != Telemetry::Result::Success)
+    // {
+    //   std::cerr << "Setting rate failed: " << set_rate_result << '\n';
+    //   return 1;
+    // }
 
-    // Set up callback to monitor altitude while the vehicle is in flight
-    telemetry.subscribe_position([](Telemetry::Position position)
-                                 { std::cout << "Altitude: " << position.relative_altitude_m << " m\n"; });
+    // // Set up callback to monitor altitude while the vehicle is in flight
+    // telemetry.subscribe_position([](Telemetry::Position position)
+    //                              { std::cout << "Altitude: " << position.relative_altitude_m << " m\n"; });
 
     // Check until vehicle is ready to arm
     // while (telemetry.health_all_ok() != true)
@@ -94,9 +97,12 @@ int main()
     // }
 
     // Arm vehicle
-    std::cout << "Arming...\n";
-    const Action::Result arm_result = action.arm();
-    mavlink_message_t msg = mavlink_message_t;
+    // std::cout << "Arming...\n";
+    // const Action::Result arm_result = action.arm();
+
+    // mavlink_message_t msg = mavlink_message_t;
+
+    send_fuzzing_Message(mavlink_passthrough, bytesRead);
 
     return 0;
   }
@@ -113,4 +119,36 @@ int main()
   }
 
   return 0;
+}
+
+void send_fuzzing_Message(MavlinkPassthrough &mavlink_passthrough, std::streamsize bytesRead)
+{
+
+  MavlinkPassthrough::CommandLong command{};
+  command.command = MAV_CMD_DO_SET_ROI;
+  command.param1 = 841;
+  command.param2 = -355;
+  command.param3 = -478;
+  command.param4 = -605;
+  command.param5 = 409;
+  command.param6 = -237;
+  command.param7 = -691;
+  mavlink_passthrough.send_command_long(command);
+
+  mavlink_passthrough.queue_message(
+      [&](MavlinkAddress mavlink_address, uint8_t channel)
+      {
+        mavlink_message_t message;
+        mavlink_msg_heartbeat_pack_chan(
+            mavlink_address.system_id,
+            mavlink_address.component_id,
+            channel,
+            &message,
+            MAV_TYPE_GENERIC,
+            MAV_AUTOPILOT_GENERIC,
+            0,
+            0,
+            0);
+        return message;
+      });
 }
