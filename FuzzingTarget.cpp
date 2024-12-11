@@ -19,7 +19,7 @@ using std::chrono::seconds;
 using std::this_thread::sleep_for;
 
 #define BUFFER_SIZE 256
-static void send_fuzzing_Message(MavlinkPassthrough &mavlink_passthrough, std::streamsize bytesRead);
+static void send_fuzzing_Message(MavlinkPassthrough &mavlink_passthrough, char *inputBytes);
 
 int main()
 {
@@ -102,7 +102,7 @@ int main()
 
     // mavlink_message_t msg = mavlink_message_t;
 
-    send_fuzzing_Message(mavlink_passthrough, bytesRead);
+    send_fuzzing_Message(mavlink_passthrough, buffer);
 
     return 0;
   }
@@ -121,19 +121,29 @@ int main()
   return 0;
 }
 
-void send_fuzzing_Message(MavlinkPassthrough &mavlink_passthrough, std::streamsize bytesRead)
+void send_fuzzing_Message(MavlinkPassthrough &mavlink_passthrough, char *inputBytes)
 {
 
   MavlinkPassthrough::CommandLong command{};
-  command.command = MAV_CMD_DO_SET_ROI;
-  command.param1 = 841;
-  command.param2 = -355;
-  command.param3 = -478;
-  command.param4 = -605;
-  command.param5 = 409;
-  command.param6 = -237;
-  command.param7 = -691;
+  command.command = static_cast<uint16_t>(inputBytes[0]) | (static_cast<uint16_t>(inputBytes[1]) << 8);
+  command.param1 = *reinterpret_cast<float *>(&inputBytes[2]);  // Bytes 2-5 für param1
+  command.param2 = *reinterpret_cast<float *>(&inputBytes[6]);  // Bytes 6-9 für param2
+  command.param3 = *reinterpret_cast<float *>(&inputBytes[10]); // Bytes 10-13 für param3
+  command.param4 = *reinterpret_cast<float *>(&inputBytes[14]); // Bytes 14-17 für param4
+  command.param5 = *reinterpret_cast<float *>(&inputBytes[18]); // Bytes 18-21 für param5
+  command.param6 = *reinterpret_cast<float *>(&inputBytes[22]); // Bytes 22-25 für param6
+  command.param7 = *reinterpret_cast<float *>(&inputBytes[26]); // Bytes 26-29 für param7
   mavlink_passthrough.send_command_long(command);
+
+  // Ausgabe der gesetzten Werte
+  std::cout << "Command: " << command.command << std::endl;
+  std::cout << "Param1: " << command.param1 << std::endl;
+  std::cout << "Param2: " << command.param2 << std::endl;
+  std::cout << "Param3: " << command.param3 << std::endl;
+  std::cout << "Param4: " << command.param4 << std::endl;
+  std::cout << "Param5: " << command.param5 << std::endl;
+  std::cout << "Param6: " << command.param6 << std::endl;
+  std::cout << "Param7: " << command.param7 << std::endl;
 
   mavlink_passthrough.queue_message(
       [&](MavlinkAddress mavlink_address, uint8_t channel)
